@@ -1,140 +1,101 @@
-# Electronic Health Record Blockchain Based Platfrom - Project
+# EHR on Hyperledger Fabric
 
-## Tech stack
+A blockchain-based Electronic Health Record (EHR) system built on Hyperledger Fabric. Patients, doctors, and insurance providers are onboarded on-chain, medical records are written immutably to the ledger, and access to records is granted/controlled through chaincode-enforced permissions.
 
-    - Hyperledger Fabric blockchain (Node SDK JavaScript)
-    - Node.js
-    - Next.js
-    - IPFS
+## Why Blockchain for EHR?
 
-<!-- ADD github access 
+Traditional EHR systems rely on centralized databases controlled by a single hospital or provider, making patient data siloed, hard to audit, and vulnerable to unauthorized tampering. This project uses Hyperledger Fabric — a permissioned blockchain — to give patients ownership over who can access their records, while keeping a tamper-evident, auditable history of every read/write on the ledger.
 
-$ eval "$(ssh-agent -s)"
-$ ssh-add ~/ssh/github -->
+## Architecture
 
-# Steps to setup project
+- **Chaincode** (`fabric-samples/asset-transfer-basic/chaincode-javascript`, deployed as `ehrChainCode`): the smart contract enforcing onboarding, record writes, and access control.
+- **server-node-sdk**: Express.js REST API that wraps the Fabric Node SDK (`fabric-network`) to submit/evaluate transactions on behalf of clients.
+- **Fabric test network**: 2-org network (Org1, Org2) with CouchDB as the world-state database, enabling rich JSON queries and history lookups.
 
-## Download fabric binarys and fabric sample repo
+## Tech Stack
 
-    $ ./install-fabric.sh 
+- **Blockchain**: Hyperledger Fabric 2.5, Fabric CA
+- **Smart Contract**: JavaScript (fabric-contract-api)
+- **Backend**: Node.js, Express 5, fabric-network SDK
+- **State DB**: CouchDB
+- **Containerization**: Docker & Docker Compose
 
-## To test network 
+## Chaincode Functions
 
-    $ cd fabric-samples/test-network
-    $ ./network.sh up
+| Function | Purpose |
+|---|---|
+| `onboardPatient` | Registers a new patient on the ledger |
+| `onboardDoctor` | Registers a new doctor |
+| `onboardInsurance` | Registers an insurance provider |
+| `addRecord` | Writes a new medical record for a patient |
+| `grantAccess` | Grants a doctor/provider access to a patient's records |
+| `getRecordById` | Fetches a specific record by ID |
+| `getAllRecordsByPatientId` | Fetches all records belonging to a patient |
+| `fetchLedger` | Returns the full ledger state |
+| `queryHistoryOfAsset` | Returns the full transaction history of a given asset (audit trail) |
 
-    $ docker ps    // to check running container or check in docker desktop
-    
-    $ ./network.sh down     // to down network
+## API Endpoints
 
-## to run network with ca and create mychannel 
+The `server-node-sdk` exposes the following REST endpoints (see `EHR-APIs.postman_collection.json` for ready-to-import requests):
 
-    $ cd fabric-samples/test-network
-    
-    Create network with ca cert: 
-    
-    $ ./network.sh up createChannel -ca -s couchdb
-    
-### Chain code deployment command
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/status` | Health check |
+| POST | `/registerPatient` | Onboard a new patient |
+| POST | `/loginPatient` | Authenticate a patient |
+| POST | `/addRecord` | Add a medical record |
+| POST | `/getRecordById` | Get a single record |
+| POST | `/getAllRecordsByPatientId` | Get all records for a patient |
+| POST | `/grantAccess` | Grant record access to a doctor/provider |
+| POST | `/fetchLedger` | Fetch entire ledger state |
+| POST | `/queryHistoryOfAsset` | Get transaction history for an asset |
 
-- Deploy chain code
-	    
-    $ ./network.sh deployCC -ccn ehrChainCode -ccp ../asset-transfer-basic/chaincode-javascript/ -ccl javascript
+## Getting Started
 
-    *Down Network - only if you want to stop network or close system
-	
-    $ ./network.sh down
+### Prerequisites
+- Docker & Docker Compose
+- Node.js (v18+)
+- curl, jq
 
-### Register Admin
+### 1. Bring up the Fabric network
+cd fabric-samples/test-network
+./network.sh up createChannel -ca -s couchdb
 
-    $ cd server-node-sdk/
-    $ node cert-script/registerOrg1Admin.js
-    $ node cert-script/registerOrg2Admin.js
+### 2. Deploy the chaincode
+./network.sh deployCC -ccn ehrChainCode -ccp ../asset-transfer-basic/chaincode-javascript/ -ccl javascript
 
-### onboard script
-    
-    $ node cert-script/onboardHospital01.js 
-    $ node cert-script/onboardDoctor.js
+### 3. Start the backend
+cd ../../server-node-sdk
+npm install
+npm run dev
 
-    $ node cert-script/onboardInsuranceCompany.js 
-    $ node cert-script/onboardInsuranceAgent.js
+### 4. Test the APIs
+Import EHR-APIs.postman_collection.json into Postman and hit /status to confirm the server is up.
 
-    *** you can use script to call chaincode and perform read and write opration on blockchain ledger. - optional *** 
+## Known Issues
 
-### start node server to use api
+- **Docker Desktop for Linux users**: chaincode installation can intermittently fail with `docker build failed: write unix @->/run/host-services/docker.proxy.sock: write: broken pipe`. This is a known Docker Desktop VM-proxy issue, not a chaincode/network bug. Workaround: switch to the native Docker Engine context (`docker context use default`) before running deployCC, or use the Chaincode-as-a-Service (CCaaS) builder under `fabric-samples/builders/ccaas` to bypass in-peer image builds entirely.
 
-    $ npm run dev
+## Project Structure
 
-### API List
-    
-    1. registerPatient - as Patient
-    2. loginPatient - as Patient
-    3. grantAccess - to doctor from Patient
-    4. addRecord - of Patient
-    5. getRecordById - of Patient 
-    6. getAllRecordByPatienId - filter record by patient
-    7. fetchLedger - fetch all transaction only admin can fetch.
+- fabric-samples/ - Hyperledger Fabric test network + tooling
+- server-node-sdk/ - Express REST API + Fabric SDK integration
+  - app.js - Route definitions
+  - helper.js - Wallet/identity + chaincode invocation helpers
+  - invoke.js / query.js - Submit/evaluate transaction wrappers
+  - cert-script/ - Admin/user onboarding scripts (CA enrollment)
+- fabric-explorer/ - Hyperledger Explorer config for ledger visualization
+- backup/ - Earlier iteration of the SDK layer
+- EHR-APIs.postman_collection.json
 
-## chaincode logic
+## Roadmap
 
-    - lets first understand the actors in our chaincode
+- [ ] Insurance claim creation & approval flow
+- [ ] Researcher onboarding + consent-based data sharing
+- [ ] Patient reward issuance for data-sharing consent
+- [ ] Frontend dashboard for patients/doctors
 
-    1. Goverment - network owner
-    2. Hospital - Network orgination 
-    3. Practicing physician / Doctor - member of hospital
-    4. Diagnostics center - org OR peer of hospital
-    5. Pharmacies - Org OR peer of hospital
-    6. Researchers / R&D - org
-    7. Insurance companies - org
-    8. Patient - end user
+## License
 
+See LICENSE.
 
-   ## now lets see there read write access
-
-        1. Goverment - network owner - admin access
-        2. Hospital - Network orgination - Read/Write (doctor data)
-        3. Practicing physician/Doctor - Read/Write (Patient data w.r.t to hospital)
-        4. Diagnostics center - Read/Write (Patient records w.r.t to diagnostics center)
-        5. Pharmacies - Read/Write (Patient prescriptions w.r.t to pharma center)
-        6. Researchers / R&D - Read data of hospital conect, pateint based on consent. 
-        7. Insurance companies - Read/Write (Patient claims)
-        8. Patient - Read/Write (All generated patient data)
-
-  ## object strucutre in db.
-
-  [ "recordType"="hospital", "createdBy"="hospitalId", data={ name="ABC Hosptial", address="acb location"  } ]
-
-  [ "recordType"="physician", "createdBy"="physicianID", data={ name="ABC Hosptial", address="acb location"  } ]
-
-## Steps to setup explorer
-
-Step 0:  $ cd fabric-explorer/
-
-Step 1. Copy the orgination folder from your running network to explorer to get access of one of the node in network.
-
-    $  sudo cp -r ../fabric-samples/test-network/organizations/ .
-    $  cp -r ../fabric-samples/test-network/organizations/ .
-
-Step 2. Export env vraiables.
-    
-    export EXPLORER_CONFIG_FILE_PATH=./config.json
-    export EXPLORER_PROFILE_DIR_PATH=./connection-profile
-    export FABRIC_CRYPTO_PATH=./organizations
-
- 
-Step 3. Edit test-network.json 
-	
-    Inside adminPrivateKey section check the path
-    It should look like this (change the id which is present in your crypto certs)
-
-Step 4: 
-    to start with out logs
-
-    $ docker-compose up -d                    
-
-    to start with logs.
-    
-    $ docker-compose up
-
-Step 5: To Stop Explorer
-        $ docker-compose down
