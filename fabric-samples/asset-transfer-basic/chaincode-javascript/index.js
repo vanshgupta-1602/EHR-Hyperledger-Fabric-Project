@@ -10,3 +10,5 @@ const ehrChainCode = require('./lib/ehrChainCode');
 
 module.exports.ehrChainCode = ehrChainCode;
 module.exports.contracts = [ehrChainCode];
+
+
